@@ -29,6 +29,12 @@ jobs:
           python .github/scripts/check_release.py
         shell: bash
 
+      - name: Debug Print DOWNLOAD_URLS
+        if: steps.check_release.outputs.new_version != ''
+        run: |
+          echo "DEBUG: DOWNLOAD_URLS=${{ steps.check_release.outputs.download_urls }}"
+          echo "DEBUG: New Version=${{ steps.check_release.outputs.new_version }}"
+
       - name: Download and process new release
         if: steps.check_release.outputs.new_version != ''
         id: download_process
@@ -36,7 +42,7 @@ jobs:
           NEW_VERSION=${{ steps.check_release.outputs.new_version }}
           DOWNLOAD_URLS=${{ steps.check_release.outputs.download_urls }}
 
-          # Ensure DOWNLOAD_URLS is a valid JSON array
+          # Ensure DOWNLOAD_URLS is a valid JSON array and not empty
           if [[ -z "$DOWNLOAD_URLS" ]]; then
             echo "No download URLs found."
             exit 1
@@ -45,7 +51,7 @@ jobs:
           mkdir -p downloads
           cd downloads
 
-          # Parse the JSON array of URLs using jq
+          # Parse the JSON array of URLs using jq and iterate over them
           echo "$DOWNLOAD_URLS" | jq -c '.[]' | while read url; do
             filename=$(basename "$url")
             echo "Attempting to download from: $url"
