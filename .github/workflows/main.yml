@@ -44,7 +44,13 @@ jobs:
             exit 1
           }
         shell: pwsh
-
+        
+      - name: Debug outputs
+        run: |
+          echo "New Version: ${{ steps.prepare_assets.outputs.new_version }}"
+          echo "Asset Info: ${{ steps.prepare_assets.outputs.asset_info }}"
+        shell: pwsh
+            
       - name: Download and process assets
         if: steps.prepare_assets.outputs.new_version != ''
         id: download_process
