@@ -29,9 +29,28 @@ jobs:
             exit 1
           fi
 
-          # 输出新版本和资产信息
+          # 输出新版本和资产信息（转换为简单格式）
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "asset_info=$ASSETS" >> $GITHUB_OUTPUT
+
+          # 将资产信息提取为简单格式并写入 GITHUB_OUTPUT
+          index=1
+          for row in $(echo "$ASSETS" | jq -r '. | @base64'); do
+            _jq() {
+              echo ${row} | base64 --decode | jq -r ${1}
+            }
+
+            URL=$(_jq '.url')
+            FILENAME=$(_jq '.name')
+            ARCH=$(_jq '.arch')
+
+            # 将资产信息逐个写入输出
+            echo "asset_$index_url=$URL" >> $GITHUB_OUTPUT
+            echo "asset_$index_filename=$FILENAME" >> $GITHUB_OUTPUT
+            echo "asset_$index_arch=$ARCH" >> $GITHUB_OUTPUT
+
+            index=$((index + 1))
+          done
+
 
       - name: Debug outputs
         run: |
