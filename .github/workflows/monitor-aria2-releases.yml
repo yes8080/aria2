@@ -46,15 +46,17 @@ jobs:
         id: download_process
         run: |
           NEW_VERSION=${{ steps.check_release.outputs.new_version }}
+          # Remove the leading 'v' from the tag name if it exists
+          VERSION_NO_V=${NEW_VERSION#v}
           URL="https://github.com/aria2/aria2/releases/download/${NEW_VERSION}/"
-          wget "${URL}aria2-${NEW_VERSION:1}-win-64bit-build1.zip" -O aria2-64.zip
-          wget "${URL}aria2-${NEW_VERSION:1}-win-32bit-build1.zip" -O aria2-32.zip
+          wget "${URL}aria2-${VERSION_NO_V}-win-64bit-build1.zip" -O aria2-64.zip
+          wget "${URL}aria2-${VERSION_NO_V}-win-32bit-build1.zip" -O aria2-32.zip
           unzip aria2-64.zip -d .
           unzip aria2-32.zip -d .
-          cp ./dl.bat "aria2-${NEW_VERSION:1}-win-64bit-build1/"
-          cp ./dl.bat "aria2-${NEW_VERSION:1}-win-32bit-build1/"
-          zip -r "aria2-${NEW_VERSION:1}-win-64bit-build1-with-dl-bat.zip" "aria2-${NEW_VERSION:1}-win-64bit-build1"
-          zip -r "aria2-${NEW_VERSION:1}-win-32bit-build1-with-dl-bat.zip" "aria2-${NEW_VERSION:1}-win-32bit-build1"
+          cp ./dl.bat "aria2-${VERSION_NO_V}-win-64bit-build1/"
+          cp ./dl.bat "aria2-${VERSION_NO_V}-win-32bit-build1/"
+          zip -r "aria2-${VERSION_NO_V}-win-64bit-build1-with-dl-bat.zip" "aria2-${VERSION_NO_V}-win-64bit-build1"
+          zip -r "aria2-${VERSION_NO_V}-win-32bit-build1-with-dl-bat.zip" "aria2-${VERSION_NO_V}-win-32bit-build1"
 
       - name: Create Release
         if: steps.download_process.outcome == 'success'
@@ -72,7 +74,9 @@ jobs:
       - name: Upload Release Asset
         if: steps.create_release.outcome == 'success'
         run: |
-          gh release upload ${{ steps.check_release.outputs.new_version }} \
-            "aria2-${{ steps.check_release.outputs.new_version:1 }}-win-64bit-build1-with-dl-bat.zip" \
-            "aria2-${{ steps.check_release.outputs.new_version:1 }}-win-32bit-build1-with-dl-bat.zip" \
+          NEW_VERSION=${{ steps.check_release.outputs.new_version }}
+          VERSION_NO_V=${NEW_VERSION#v}
+          gh release upload ${NEW_VERSION} \
+            "aria2-${VERSION_NO_V}-win-64bit-build1-with-dl-bat.zip" \
+            "aria2-${VERSION_NO_V}-win-32bit-build1-with-dl-bat.zip" \
             --clobber
