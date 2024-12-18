@@ -64,7 +64,7 @@ jobs:
           
           $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
           New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
-          echo "download_dir=$downloadDir" >> $GITHUB_ENV
+          Add-Content -Path $env:GITHUB_ENV -Value "download_dir=$downloadDir"
 
           foreach ($asset in $ASSET_INFO) {
             $filename = $asset.filename
