@@ -22,7 +22,7 @@ jobs:
           NEW_VERSION=$(echo "$RELEASE_DATA" | jq -r '.tag_name' | sed 's/^release-//')
 
           # 获取符合条件的 Windows 版本
-          ASSETS=$(echo "$RELEASE_DATA" | jq -r '.assets[] | select(.browser_download_url | contains("win-")) | {url: .browser_download_url, name: .name, arch: if .name | contains("64bit") then "64bit" else "32bit" end}')
+          ASSETS=$(echo "$RELEASE_DATA" | jq -r '.assets[] | select(.browser_download_url | contains("win-")) | {url: .browser_download_url, name: .name, arch: (if .name | contains("64bit") then "64bit" else "32bit" end)}')
 
           if [ -z "$ASSETS" ]; then
             echo "No compatible Windows assets found."
