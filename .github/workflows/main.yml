@@ -87,5 +87,5 @@ jobs:
           body: "This release includes the original Aria2 binaries along with a custom dl.bat script."
           make_latest: true
           files: |
-            ${{ steps.check_release.outputs.downloadDir }}\aria2-${{ steps.check_release.outputs.new_version }}-win-64bit-build1-with-dl-bat.zip
-            ${{ steps.check_release.outputs.downloadDir }}\aria2-${{ steps.check_release.outputs.new_version }}-win-32bit-build1-with-dl-bat.zip
+            ${{ steps.download_process.outputs.downloadDir }}\aria2-${{ steps.check_release.outputs.new_version }}-win-64bit-build1-with-dl-bat.zip
+            ${{ steps.download_process.outputs.downloadDir }}\aria2-${{ steps.check_release.outputs.new_version }}-win-32bit-build1-with-dl-bat.zip
