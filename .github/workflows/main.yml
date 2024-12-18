@@ -31,7 +31,9 @@ jobs:
               download_urls = $downloadUrls
             }
             $releaseInfo | ConvertTo-Json | Out-File -FilePath "$env:GITHUB_WORKSPACE\release_info.json"
+            
             echo "new_version=$newVersion" >> $GITHUB_OUTPUT
+            
           } catch {
             Write-Host "Failed to fetch latest release information: $_"
             exit 1
@@ -62,11 +64,11 @@ jobs:
               if ($filename -like "*64bit*") {
                 Expand-Archive -Path "$downloadDir\$filename" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1" -Force
                 Copy-Item "$env:GITHUB_WORKSPACE\dl.bat" "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1\aria2-$NEW_VERSION-win-64bit-build1\" -Force
-                Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1\aria2-$NEW_VERSION-win-64bit-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1-with-dl-bat.zip" -Force
+                Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1-with-dl-bat.zip" -Force
               } elseif ($filename -like "*32bit*") {
                 Expand-Archive -Path "$downloadDir\$filename" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1" -Force
                 Copy-Item "$env:GITHUB_WORKSPACE\dl.bat" "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1\aria2-$NEW_VERSION-win-32bit-build1\" -Force
-                Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1\aria2-$NEW_VERSION-win-32bit-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1-with-dl-bat.zip" -Force
+                Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1-with-dl-bat.zip" -Force
               }
             }
           } catch {
