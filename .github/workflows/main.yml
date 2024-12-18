@@ -17,70 +17,75 @@ jobs:
         id: check_release
         run: |
           $repo = "aria2/aria2"
-          $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest"
-          $newVersion = $latestRelease.tag_name
-          $downloadUrls = @($latestRelease.assets.browser_download_url)
+          try {
+            $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -ErrorAction Stop
+            $newVersion = $latestRelease.tag_name -replace '^release-', '' # 去除"release-"前缀
+            $downloadUrls = @($latestRelease.assets.browser_download_url)
 
-          if (-not $downloadUrls) {
-            Write-Host "No download URLs found."
+            if (-not $downloadUrls) {
+              Write-Host "No download URLs found."
+              exit 1
+            }
+
+            # Save the new version and download URLs to a file
+            $releaseInfo = @{
+              new_version = $newVersion
+              download_urls = $downloadUrls
+            }
+            $releaseInfo | ConvertTo-Json | Out-File -FilePath "$env:GITHUB_WORKSPACE\release_info.json"
+
+            echo "::set-output name=new_version::$newVersion"
+          } catch {
+            Write-Host "Failed to fetch latest release information: $_"
             exit 1
           }
-
-          # Save the new version and download URLs to a file
-          $releaseInfo = @{
-            new_version = $newVersion
-            download_urls = $downloadUrls
-          }
-          $releaseInfo | ConvertTo-Json | Out-File -FilePath "$env:GITHUB_WORKSPACE\release_info.json"
-
-          echo "::set-output name=new_version::$newVersion"
         shell: pwsh
-
-      - name: Debug Print New Version
-        if: steps.check_release.outputs.new_version != ''
-        run: |
-          Write-Host "DEBUG: New Version=${{ steps.check_release.outputs.new_version }}"
 
       - name: Download and process new release
         if: steps.check_release.outputs.new_version != ''
         id: download_process
         run: |
           $NEW_VERSION = "${{ steps.check_release.outputs.new_version }}"
-          $releaseInfo = Get-Content -Raw -Path "$env:GITHUB_WORKSPACE\release_info.json" | ConvertFrom-Json
-          $DOWNLOAD_URLS = $releaseInfo.download_urls
+          try {
+            $releaseInfo = Get-Content -Raw -Path "$env:GITHUB_WORKSPACE\release_info.json" | ConvertFrom-Json
+            $DOWNLOAD_URLS = $releaseInfo.download_urls
 
-          $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
-          if (-not (Test-Path $downloadDir)) {
-            New-Item -ItemType Directory -Force -Path $downloadDir
-          }
-
-          foreach ($url in $DOWNLOAD_URLS) {
-            $filename = [System.IO.Path]::GetFileName($url)
-            Write-Host "Attempting to download from: $url"
-            Invoke-WebRequest -Uri $url -OutFile "$downloadDir\$filename"
-
-            if ($filename -like "*64bit*") {
-              Expand-Archive -Path "$downloadDir\$filename" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1"
-              Copy-Item "$env:GITHUB_WORKSPACE\dl.bat" "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1\"
-              Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1-with-dl-bat.zip"
-            } elseif ($filename -like "*32bit*") {
-              Expand-Archive -Path "$downloadDir\$filename" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1"
-              Copy-Item "$env:GITHUB_WORKSPACE\dl.bat" "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1\"
-              Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1-with-dl-bat.zip"
+            $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
+            if (-not (Test-Path $downloadDir)) {
+              New-Item -ItemType Directory -Force -Path $downloadDir
             }
+            echo "::set-output name=downloadDir::$downloadDir"
+
+            foreach ($url in $DOWNLOAD_URLS) {
+              $filename = [System.IO.Path]::GetFileName($url)
+              Write-Host "Attempting to download from: $url"
+              Invoke-WebRequest -Uri $url -OutFile "$downloadDir\$filename" -ErrorAction Stop
+
+              if ($filename -like "*64bit*") {
+                Expand-Archive -Path "$downloadDir\$filename" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1" -Force
+                Copy-Item "$env:GITHUB_WORKSPACE\dl.bat" "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1\" -Force
+                Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1-with-dl-bat.zip" -Force
+              } elseif ($filename -like "*32bit*") {
+                Expand-Archive -Path "$downloadDir\$filename" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1" -Force
+                Copy-Item "$env:GITHUB_WORKSPACE\dl.bat" "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1\" -Force
+                Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1-with-dl-bat.zip" -Force
+              }
+            }
+          } catch {
+            Write-Host "An error occurred while downloading or processing files: $_"
+            exit 1
           }
         shell: pwsh
-        
-      - name: Create Release
+
+      - name: Create and upload release
         if: steps.download_process.outcome == 'success'
-        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: aria2 ${{ steps.check_release.outputs.new_version }} for Windows
-          tag_name: v${{ steps.check_release.outputs.new_version }}
+          name: "aria2 ${{ steps.check_release.outputs.new_version }} for Windows"
+          tag_name: "v${{ steps.check_release.outputs.new_version }}" # 注意这里仍然需要添加v前缀以符合Git Tag命名规范
           body: "This release includes the original Aria2 binaries along with a custom dl.bat script."
           make_latest: true
           files: |
-            .\downloads\aria2-${{ steps.check_release.outputs.new_version }}-win-64bit-build1-with-dl-bat.zip
-            .\downloads\aria2-${{ steps.check_release.outputs.new_version }}-win-32bit-build1-with-dl-bat.zip
+            ${{ steps.check_release.outputs.downloadDir }}\aria2-${{ steps.check_release.outputs.new_version }}-win-64bit-build1-with-dl-bat.zip
+            ${{ steps.check_release.outputs.downloadDir }}\aria2-${{ steps.check_release.outputs.new_version }}-win-32bit-build1-with-dl-bat.zip
