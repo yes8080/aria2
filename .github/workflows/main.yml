@@ -35,12 +35,8 @@ jobs:
 
             $assetInfoJson = ConvertTo-Json $assetInfo
 
-            echo "new_version=$newVersion"
-
-            echo "new_version=$newVersion" >> $GITHUB_OUTPUT
-            echo "asset_info=$assetInfoJson" >> $GITHUB_OUTPUT
-
-            echo $GITHUB_OUTPUT
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "new_version=$newVersion"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "asset_info=$assetInfoJson"
             
           } catch {
             Write-Host "Failed to fetch latest release information: $_"
