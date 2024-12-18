@@ -1,5 +1,6 @@
-import sys
-import json
+import os
+
+OUTPUT_DIR = os.getenv("GITHUB_WORKSPACE", ".")  # 默认工作目录
 
 def parse_assets(json_filepath):
     with open(json_filepath, 'r') as f:
@@ -7,7 +8,7 @@ def parse_assets(json_filepath):
 
     version_tag = data.get('tag_name', '').replace('release-', '')
 
-    with open('new_version.txt', 'w') as f:
+    with open(os.path.join(OUTPUT_DIR, 'new_version.txt'), 'w') as f:
         f.write(version_tag)
 
     asset_info = []
@@ -19,6 +20,6 @@ def parse_assets(json_filepath):
             arch = "64bit" if "64bit" in name else "32bit"
             asset_info.append((url, name, arch))
 
-    with open('assets_info.txt', 'w') as f:
+    with open(os.path.join(OUTPUT_DIR, 'assets_info.txt'), 'w') as f:
         for url, filename, arch in asset_info:
             f.write(f"{url}\n{filename}\n{arch}\n")
