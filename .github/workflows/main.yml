@@ -13,39 +13,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
-
       - name: Check for new release and get download URLs
         id: check_release
         run: |
-          python .github/scripts/check_release.py
-        shell: bash
+          $repo = "aria2/aria2"
+          $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest"
+          $newVersion = $latestRelease.tag_name
+          $downloadUrls = @($latestRelease.assets.browser_download_url)
+
+          if (-not $downloadUrls) {
+            Write-Host "No download URLs found."
+            exit 1
+          }
+
+          # Save the new version and download URLs to environment variables
+          echo "::set-output name=new_version::$newVersion"
+          echo "::set-output name=download_urls::$(ConvertTo-Json $downloadUrls)"
+        shell: pwsh
 
       - name: Debug Print DOWNLOAD_URLS
         if: steps.check_release.outputs.new_version != ''
         run: |
-          echo "DEBUG: DOWNLOAD_URLS=${{ steps.check_release.outputs.download_urls }}"
-          echo "DEBUG: New Version=${{ steps.check_release.outputs.new_version }}"
+          Write-Host "DEBUG: DOWNLOAD_URLS=${{ steps.check_release.outputs.download_urls }}"
+          Write-Host "DEBUG: New Version=${{ steps.check_release.outputs.new_version }}"
 
       - name: Download and process new release
         if: steps.check_release.outputs.new_version != ''
         id: download_process
         run: |
           $NEW_VERSION = "${{ steps.check_release.outputs.new_version }}"
-          $DOWNLOAD_URLS = @("${{ steps.check_release.outputs.download_urls }}")
-
-          if (-not $DOWNLOAD_URLS) {
-            Write-Host "No download URLs found."
-            exit 1
-          }
+          $DOWNLOAD_URLS = ConvertFrom-Json "${{ steps.check_release.outputs.download_urls }}"
 
           $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
           if (-not (Test-Path $downloadDir)) {
@@ -56,7 +53,7 @@ jobs:
             $filename = [System.IO.Path]::GetFileName($url)
             Write-Host "Attempting to download from: $url"
             Invoke-WebRequest -Uri $url -OutFile "$downloadDir\$filename"
-            
+
             if ($filename -like "*64bit*") {
               Expand-Archive -Path "$downloadDir\$filename" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1"
               Copy-Item "$env:GITHUB_WORKSPACE\dl.bat" "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1\"
