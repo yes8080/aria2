@@ -26,15 +26,19 @@ jobs:
             exit 1
           }
 
-          # Save the new version and download URLs to environment variables
+          # Save the new version and download URLs to a file
+          $releaseInfo = @{
+            new_version = $newVersion
+            download_urls = $downloadUrls
+          }
+          $releaseInfo | ConvertTo-Json | Out-File -FilePath "$env:GITHUB_WORKSPACE\release_info.json"
+
           echo "::set-output name=new_version::$newVersion"
-          echo "::set-output name=download_urls::$(ConvertTo-Json $downloadUrls)"
         shell: pwsh
 
-      - name: Debug Print DOWNLOAD_URLS
+      - name: Debug Print New Version
         if: steps.check_release.outputs.new_version != ''
         run: |
-          Write-Host "DEBUG: DOWNLOAD_URLS=${{ steps.check_release.outputs.download_urls }}"
           Write-Host "DEBUG: New Version=${{ steps.check_release.outputs.new_version }}"
 
       - name: Download and process new release
@@ -42,7 +46,8 @@ jobs:
         id: download_process
         run: |
           $NEW_VERSION = "${{ steps.check_release.outputs.new_version }}"
-          $DOWNLOAD_URLS = ConvertFrom-Json "${{ steps.check_release.outputs.download_urls }}"
+          $releaseInfo = Get-Content -Raw -Path "$env:GITHUB_WORKSPACE\release_info.json" | ConvertFrom-Json
+          $DOWNLOAD_URLS = $releaseInfo.download_urls
 
           $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
           if (-not (Test-Path $downloadDir)) {
