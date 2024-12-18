@@ -39,6 +39,8 @@ jobs:
 
             echo "new_version=$newVersion" >> $GITHUB_OUTPUT
             echo "asset_info=$assetInfoJson" >> $GITHUB_OUTPUT
+
+            echo $GITHUB_OUTPUT
             
           } catch {
             Write-Host "Failed to fetch latest release information: $_"
