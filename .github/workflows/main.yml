@@ -35,8 +35,8 @@ jobs:
 
             $assetInfoJson = ConvertTo-Json $assetInfo
 
-            Add-Content -Path $GITHUB_OUTPUT -Value "new_version=$newVersion"
-            Add-Content -Path $GITHUB_OUTPUT -Value "asset_info=$assetInfoJson"
+            "new_version=$newVersion" >> $env:GITHUB_OUTPUT
+            "asset_info=$assetInfoJson" >> $env:GITHUB_OUTPUT
             
           } catch {
             Write-Host "Failed to fetch latest release information: $_"
@@ -59,7 +59,7 @@ jobs:
           
           $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
           New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
-          Add-Content -Path $GITHUB_OUTPUT -Value "download_dir=$downloadDir"
+          "download_dir=$downloadDir" >> $env:GITHUB_OUTPUT
 
           foreach ($asset in $ASSET_INFO) {
             $filename = $asset.filename
