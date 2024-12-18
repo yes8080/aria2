@@ -11,28 +11,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Check for new release and get download URLs
-        id: check_release
+      - name: Check for new release and prepare assets
+        id: prepare_assets
         run: |
           $repo = "aria2/aria2"
           try {
             $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -ErrorAction Stop
-            $newVersion = $latestRelease.tag_name -replace '^release-', '' # 去除"release-"前缀
-            $downloadUrls = @($latestRelease.assets.browser_download_url)
-
-            if (-not $downloadUrls) {
-              Write-Host "No download URLs found."
+            $newVersion = $latestRelease.tag_name -replace '^release-', ''
+            $assets = $latestRelease.assets | Where-Object { $_.browser_download_url -like "*win-*bit-build*" }
+            
+            if (-not $assets) {
+              Write-Host "No compatible Windows assets found."
               exit 1
             }
 
-            # Save the new version and download URLs to a file
-            $releaseInfo = @{
-              new_version = $newVersion
-              download_urls = $downloadUrls
+            $assetInfo = foreach ($asset in $assets) {
+              @{
+                url = $asset.browser_download_url
+                filename = [System.IO.Path]::GetFileName($asset.browser_download_url)
+                arch = if ($asset.name -like "*64bit*") { "64bit" } else { "32bit" }
+              }
             }
-            $releaseInfo | ConvertTo-Json | Out-File -FilePath "$env:GITHUB_WORKSPACE\release_info.json"
-            
+
+            $assetInfoJson = ConvertTo-Json $assetInfo
+            $assetInfoJson | Out-File -FilePath "$env:GITHUB_WORKSPACE\asset_info.json"
+
             echo "new_version=$newVersion" >> $GITHUB_OUTPUT
+            echo "asset_info=$assetInfoJson" >> $GITHUB_OUTPUT
             
           } catch {
             Write-Host "Failed to fetch latest release information: $_"
@@ -40,40 +45,26 @@ jobs:
           }
         shell: pwsh
 
-      - name: Download and process new release
-        if: steps.check_release.outputs.new_version != ''
+      - name: Download and process assets
+        if: steps.prepare_assets.outputs.new_version != ''
         id: download_process
         run: |
-          $NEW_VERSION = "${{ steps.check_release.outputs.new_version }}"
-          try {
-            $releaseInfo = Get-Content -Raw -Path "$env:GITHUB_WORKSPACE\release_info.json" | ConvertFrom-Json
-            $DOWNLOAD_URLS = $releaseInfo.download_urls
+          $NEW_VERSION = "${{ steps.prepare_assets.outputs.new_version }}"
+          $ASSET_INFO = ConvertFrom-Json "${{ steps.prepare_assets.outputs.asset_info }}"
+          
+          $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
+          New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
+          echo "download_dir=$downloadDir" >> $GITHUB_OUTPUT
 
-            $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
-            if (-not (Test-Path $downloadDir)) {
-              New-Item -ItemType Directory -Force -Path $downloadDir
-            }
-            
-            echo "downloadDir=$downloadDir" >> $GITHUB_OUTPUT
+          foreach ($asset in $ASSET_INFO) {
+            $filename = $asset.filename
+            $arch = $asset.arch
+            Write-Host "Attempting to download from: $($asset.url)"
+            Invoke-WebRequest -Uri $asset.url -OutFile "$downloadDir\$filename" -ErrorAction Stop
 
-            foreach ($url in $DOWNLOAD_URLS) {
-              $filename = [System.IO.Path]::GetFileName($url)
-              Write-Host "Attempting to download from: $url"
-              Invoke-WebRequest -Uri $url -OutFile "$downloadDir\$filename" -ErrorAction Stop
-
-              if ($filename -like "*64bit*") {
-                Expand-Archive -Path "$downloadDir\$filename" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1" -Force
-                Copy-Item "$env:GITHUB_WORKSPACE\dl.bat" "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1\aria2-$NEW_VERSION-win-64bit-build1\" -Force
-                Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-64bit-build1-with-dl-bat.zip" -Force
-              } elseif ($filename -like "*32bit*") {
-                Expand-Archive -Path "$downloadDir\$filename" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1" -Force
-                Copy-Item "$env:GITHUB_WORKSPACE\dl.bat" "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1\aria2-$NEW_VERSION-win-32bit-build1\" -Force
-                Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-32bit-build1-with-dl-bat.zip" -Force
-              }
-            }
-          } catch {
-            Write-Host "An error occurred while downloading or processing files: $_"
-            exit 1
+            Expand-Archive -Path "$downloadDir\$filename" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-$arch-build1" -Force
+            Copy-Item "$env:GITHUB_WORKSPACE\dl.bat" "$downloadDir\aria2-$NEW_VERSION-win-$arch-build1\" -Force
+            Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-$arch-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-$arch-build1-with-dl-bat.zip" -Force
           }
         shell: pwsh
 
@@ -82,10 +73,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: "aria2 ${{ steps.check_release.outputs.new_version }} for Windows"
-          tag_name: "v${{ steps.check_release.outputs.new_version }}" # 注意这里仍然需要添加v前缀以符合Git Tag命名规范
+          name: "aria2 ${{ steps.prepare_assets.outputs.new_version }} for Windows"
+          tag_name: "v${{ steps.prepare_assets.outputs.new_version }}"
           body: "This release includes the original Aria2 binaries along with a custom dl.bat script."
           make_latest: true
           files: |
-            ${{ steps.download_process.outputs.downloadDir }}\aria2-${{ steps.check_release.outputs.new_version }}-win-64bit-build1-with-dl-bat.zip
-            ${{ steps.download_process.outputs.downloadDir }}\aria2-${{ steps.check_release.outputs.new_version }}-win-32bit-build1-with-dl-bat.zip
+            ${{ steps.download_process.outputs.download_dir }}\aria2-${{ steps.prepare_assets.outputs.new_version }}-win-64bit-build1-with-dl-bat.zip
+            ${{ steps.download_process.outputs.download_dir }}\aria2-${{ steps.prepare_assets.outputs.new_version }}-win-32bit-build1-with-dl-bat.zip
