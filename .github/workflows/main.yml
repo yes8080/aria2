@@ -52,7 +52,7 @@ jobs:
           cd downloads
 
           # Parse the JSON array of URLs using jq and iterate over them
-          echo "$DOWNLOAD_URLS" | jq -c '.[]' | while read url; do
+          echo "$DOWNLOAD_URLS" | jq -c '.[]' | while IFS= read -r url; do
             filename=$(basename "$url")
             echo "Attempting to download from: $url"
             curl -L -o "$filename" "$url"
