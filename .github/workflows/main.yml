@@ -39,9 +39,8 @@ jobs:
 
             $assetInfoJson = ConvertTo-Json $assetInfo
 
-            # 使用 echo 输出环境变量，确保后续步骤能读取
-            Add-Content -Path $env:GITHUB_ENV -Value "new_version=$newVersion"
-            Add-Content -Path $env:GITHUB_ENV -Value "asset_info=$assetInfoJson"
+            "new_version=$newVersion" >> $env:GITHUB_OUTPUT
+            "asset_info=$assetInfoJson" >> $env:GITHUB_OUTPUT
             
           } catch {
             Write-Host "Failed to fetch latest release information: $_"
@@ -51,12 +50,12 @@ jobs:
 
       - name: Debug outputs
         run: |
-          Write-Host "New Version: ${{ env.newVersion }}"
-          Write-Host "Asset Info: ${{ env.assetInfoJson }}"
+          Write-Host "New Version: ${{ steps.prepare_assets.outputs.new_version }}"
+          Write-Host "Asset Info: ${{ steps.prepare_assets.outputs.asset_info }}"
         shell: pwsh
 
       - name: Download and process assets
-        if: ${{ env.new_version != '' }}
+        if: ${{ steps.prepare_assets.outputs.new_version != '' }}
         id: download_process
         run: |
           $NEW_VERSION = "${{ env.new_version }}"
@@ -64,7 +63,7 @@ jobs:
           
           $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
           New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
-          Add-Content -Path $env:GITHUB_ENV -Value "download_dir=$downloadDir"
+          "download_dir=$downloadDir" >> $env:GITHUB_OUTPUT
 
           foreach ($asset in $ASSET_INFO) {
             $filename = $asset.filename
@@ -93,5 +92,5 @@ jobs:
           body: "This release includes the original Aria2 binaries along with a custom dl.bat script."
           make_latest: true
           files: |
-            ${{ env.download_dir }}\aria2-${{ env.new_version }}-win-64bit-build1-with-dl-bat.zip
-            ${{ env.download_dir }}\aria2-${{ env.new_version }}-win-32bit-build1-with-dl-bat.zip
+            ${{ steps.download_process.outputs.download_dir }}\aria2-${{ steps.prepare_assets.outputs.new_version }}-win-64bit-build1-with-dl-bat.zip
+            ${{ steps.download_process.outputs.download_dir }}\aria2-${{ steps.prepare_assets.outputs.new_version }}-win-32bit-build1-with-dl-bat.zip
