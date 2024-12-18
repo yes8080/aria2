@@ -17,22 +17,25 @@ jobs:
           REPO="aria2/aria2"
           API_URL="https://api.github.com/repos/$REPO/releases/latest"
 
-          # 获取最新发布的版本信息
+          # 获取最新发布信息
           RELEASE_DATA=$(curl -s $API_URL)
-          NEW_VERSION=$(echo "$RELEASE_DATA" | jq -r '.tag_name' | sed 's/^release-//')
 
-          # 获取符合条件的 Windows 版本
+          # 使用 jq 解析符合条件的 Windows 版本资产
           ASSETS=$(echo "$RELEASE_DATA" | jq -r '.assets[] | select(.browser_download_url | contains("win-")) | {url: .browser_download_url, name: .name, arch: (if .name | contains("64bit") then "64bit" else "32bit" end)}')
+
+          echo "Parsed Assets:"
+          echo "$ASSETS"
 
           if [ -z "$ASSETS" ]; then
             echo "No compatible Windows assets found."
             exit 1
           fi
 
-          # 输出新版本和资产信息（转换为简单格式）
+          # 输出新版本和资产信息
+          NEW_VERSION=$(echo "$RELEASE_DATA" | jq -r '.tag_name' | sed 's/^release-//')
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-          # 将资产信息提取为简单格式并写入 GITHUB_OUTPUT
+          # 将资产信息逐个写入输出
           index=1
           for row in $(echo "$ASSETS" | jq -r '. | @base64'); do
             _jq() {
@@ -43,13 +46,13 @@ jobs:
             FILENAME=$(_jq '.name')
             ARCH=$(_jq '.arch')
 
-            # 将资产信息逐个写入输出
             echo "asset_$index_url=$URL" >> $GITHUB_OUTPUT
             echo "asset_$index_filename=$FILENAME" >> $GITHUB_OUTPUT
             echo "asset_$index_arch=$ARCH" >> $GITHUB_OUTPUT
 
             index=$((index + 1))
           done
+
 
       - name: Debug - Parse Assets
         run: |
