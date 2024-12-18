@@ -1,9 +1,16 @@
 #!/bin/bash
 
-DOWNLOAD_DIR="$GITHUB_WORKSPACE/downloads"
+WORK_DIR="$GITHUB_WORKSPACE"  # 工作目录
+ASSETS_FILE="$WORK_DIR/assets_info.txt"  # 资产信息文件
+
+if [ ! -f "$ASSETS_FILE" ]; then
+    echo "Error: $ASSETS_FILE does not exist."
+    exit 1
+fi
+
+DOWNLOAD_DIR="$WORK_DIR/downloads"
 mkdir -p "$DOWNLOAD_DIR"
 
-index=1
 while read -r URL FILENAME ARCH; do
     echo "Downloading $URL"
     curl -L "$URL" -o "$DOWNLOAD_DIR/$FILENAME"
@@ -11,5 +18,4 @@ while read -r URL FILENAME ARCH; do
     cp ./dl.bat "$DOWNLOAD_DIR/$ARCH/"
 
     zip -r "$DOWNLOAD_DIR/$FILENAME-batch.zip" "$DOWNLOAD_DIR/$ARCH"
-    index=$((index + 1))
-done < assets_info.txt
+done < "$ASSETS_FILE"
