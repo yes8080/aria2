@@ -23,6 +23,7 @@ def check_new_version():
             file.write(latest_tag)
 
         assets = [asset['browser_download_url'] for asset in latest_info['assets'] if '-win' in asset['name']]
+        # Ensure the JSON string is compact and valid
         print(f"::set-output name=download_urls::{json.dumps(assets)}")
     else:
         print("No new version found.")
