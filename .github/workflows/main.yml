@@ -31,8 +31,7 @@ jobs:
               download_urls = $downloadUrls
             }
             $releaseInfo | ConvertTo-Json | Out-File -FilePath "$env:GITHUB_WORKSPACE\release_info.json"
-
-            echo "::set-output name=new_version::$newVersion"
+            echo "new_version=$newVersion" >> $GITHUB_OUTPUT
           } catch {
             Write-Host "Failed to fetch latest release information: $_"
             exit 1
@@ -52,7 +51,8 @@ jobs:
             if (-not (Test-Path $downloadDir)) {
               New-Item -ItemType Directory -Force -Path $downloadDir
             }
-            echo "::set-output name=downloadDir::$downloadDir"
+            
+            echo "downloadDir=$downloadDir" >> $GITHUB_OUTPUT
 
             foreach ($url in $DOWNLOAD_URLS) {
               $filename = [System.IO.Path]::GetFileName($url)
