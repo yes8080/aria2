@@ -70,6 +70,7 @@ jobs:
           ASSET_INFO="${{ steps.prepare_assets.outputs.asset_info }}"
 
           DOWNLOAD_DIR="$GITHUB_WORKSPACE/downloads"
+          echo "download_dir=$DOWNLOAD_DIR" >> $GITHUB_OUTPUT
           mkdir -p "$DOWNLOAD_DIR"
 
           # 循环处理资产信息
