@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Check for new release
+      - name: Check for new release and get download URLs
         id: check_release
         run: |
           $latestReleaseUrl = "https://api.github.com/repos/aria2/aria2/releases/latest"
@@ -29,6 +29,11 @@ jobs:
           if ($currentTag -ne $latestTag) {
             echo "::set-output name=new_version::$latestTag"
             Set-Content -Path .latest_version -Value $latestTag
+            
+            # Extract download URLs for assets that contain "-win" in their name
+            $downloadUrls = $response.assets | Where-Object { $_.name -like "*-win*" } | Select-Object -ExpandProperty browser_download_url
+            $downloadUrlsJson = $downloadUrls | ConvertTo-Json -Compress
+            echo "::set-output name=download_urls::$downloadUrlsJson"
           } else {
             Write-Host "No new version found."
           }
@@ -38,16 +43,33 @@ jobs:
         if: steps.check_release.outputs.new_version != ''
         id: download_process
         run: |
-          $NEW_VERSION = '${{ steps.check_release.outputs.new_version }}'
-          $URL = "https://github.com/aria2/aria2/releases/download/v${NEW_VERSION}/"
-          Invoke-WebRequest "${URL}aria2-${NEW_VERSION}-win-64bit-build1.zip" -OutFile aria2-64.zip
-          Invoke-WebRequest "${URL}aria2-${NEW_VERSION}-win-32bit-build1.zip" -OutFile aria2-32.zip
-          Expand-Archive aria2-64.zip -DestinationPath .
-          Expand-Archive aria2-32.zip -DestinationPath .
-          Copy-Item ./dl.bat "aria2-${NEW_VERSION}-win-64bit-build1/"
-          Copy-Item ./dl.bat "aria2-${NEW_VERSION}-win-32bit-build1/"
-          Compress-Archive -Path "aria2-${NEW_VERSION}-win-64bit-build1" -DestinationPath "aria2-${NEW_VERSION}-win-64bit-build1-with-dl-bat.zip"
-          Compress-Archive -Path "aria2-${NEW_VERSION}-win-32bit-build1" -DestinationPath "aria2-${NEW_VERSION}-win-32bit-build1-with-dl-bat.zip"
+          $NEW_VERSION = "${{ steps.check_release.outputs.new_version }}"
+          $downloadUrls = ${{ fromJson(steps.check_release.outputs.download_urls) }}
+
+          foreach ($url in $downloadUrls) {
+            $fileName = [System.IO.Path]::GetFileName($url)
+            Write-Host "Attempting to download from: $url"
+            try {
+              Invoke-WebRequest -Uri $url -OutFile $fileName -ErrorAction Stop
+              Write-Host "Downloaded $fileName successfully."
+            } catch {
+              Write-Host "Failed to download $fileName: $_"
+              exit 1
+            }
+          }
+
+          # Process downloaded files based on the filenames
+          if (Test-Path "aria2-${NEW_VERSION}-win-64bit-build1.zip") {
+            Expand-Archive "aria2-${NEW_VERSION}-win-64bit-build1.zip" -DestinationPath .
+            Copy-Item ./dl.bat "aria2-${NEW_VERSION}-win-64bit-build1/"
+            Compress-Archive -Path "aria2-${NEW_VERSION}-win-64bit-build1" -DestinationPath "aria2-${NEW_VERSION}-win-64bit-build1-with-dl-bat.zip"
+          }
+
+          if (Test-Path "aria2-${NEW_VERSION}-win-32bit-build1.zip") {
+            Expand-Archive "aria2-${NEW_VERSION}-win-32bit-build1.zip" -DestinationPath .
+            Copy-Item ./dl.bat "aria2-${NEW_VERSION}-win-32bit-build1/"
+            Compress-Archive -Path "aria2-${NEW_VERSION}-win-32bit-build1" -DestinationPath "aria2-${NEW_VERSION}-win-32bit-build1-with-dl-bat.zip"
+          }
         shell: pwsh
 
       - name: Create Release
@@ -66,7 +88,7 @@ jobs:
       - name: Upload Release Asset
         if: steps.create_release.outcome == 'success'
         run: |
-          $NEW_VERSION = '${{ steps.check_release.outputs.new_version }}'
+          $NEW_VERSION = "${{ steps.check_release.outputs.new_version }}"
           gh release upload "v${NEW_VERSION}" `
             "aria2-${NEW_VERSION}-win-64bit-build1-with-dl-bat.zip" `
             "aria2-${NEW_VERSION}-win-32bit-build1-with-dl-bat.zip" `
