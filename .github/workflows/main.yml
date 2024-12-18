@@ -51,16 +51,15 @@ jobs:
             index=$((index + 1))
           done
 
-
-      - name: Debug outputs
+      - name: Check if Assets Found
         run: |
-          echo "New Version: ${{ steps.prepare_assets.outputs.new_version }}"
-          echo "Asset Info: ${{ steps.prepare_assets.outputs.asset_info }}"
-          
-      - name: Debug download process condition
-        run: |
-          echo "Checking if new_version is non-empty..."
-          echo "new_version: ${{ steps.prepare_assets.outputs.new_version }}"
+          if [ -z "$ASSETS" ]; then
+            echo "No compatible Windows assets found."
+            exit 1
+          else
+            echo "Assets successfully found:"
+            echo "$ASSETS"
+          fi
           
       - name: Download and process assets
         if: ${{ steps.prepare_assets.outputs.new_version != '' }}
