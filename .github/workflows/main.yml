@@ -1,102 +1,33 @@
 name: Monitor Aria2 Releases
 
 on:
-  workflow_dispatch: # 允许手动触发
+  workflow_dispatch:
 
 jobs:
-  check_and_update:
+  prepare_assets:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Check for new release and prepare assets
-        id: prepare_assets
+      - name: Get Latest Release Info
         run: |
           REPO="aria2/aria2"
           API_URL="https://api.github.com/repos/$REPO/releases/latest"
-          
-          # 获取最新发布信息
           RELEASE_DATA=$(curl -s $API_URL)
-
-          # 调用 Python 脚本解析资产信息
           echo "$RELEASE_DATA" > release_data.json
-          python3 .github/scripts/parse_assets.py release_data.json
 
-          NEW_VERSION=$(cat new_version.txt)
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-          # 输出每个资产信息
-          index=1
-          while read -r URL FILENAME ARCH; do
-            echo "asset_${index}_url=$URL" >> $GITHUB_OUTPUT
-            echo "asset_${index}_filename=$FILENAME" >> $GITHUB_OUTPUT
-            echo "asset_${index}_arch=$ARCH" >> $GITHUB_OUTPUT
-            index=$((index + 1))
-          done < assets_info.txt
-
-      - name: Debug - Parse Assets
+      - name: Parse Assets
         run: |
-          ASSETS=$(echo "$RELEASE_DATA" | jq -r '.assets[] | select(.browser_download_url | contains("win-")) | {url: .browser_download_url, name: .name, arch: (if .name | contains("64bit") then "64bit" else "32bit" end)}')
+          python3 assets/parse_assets.py release_data.json
 
-          echo "Parsed Assets:"
-          echo "$ASSETS"
-
-      - name: Check if Assets Found
+      - name: Download and Package Assets
         run: |
-          if [ -z "$ASSETS" ]; then
-            echo "No compatible Windows assets found."
-            exit 1
-          else
-            echo "Assets successfully found:"
-            echo "$ASSETS"
-          fi
-          
-      - name: Download and process assets
-        if: ${{ steps.prepare_assets.outputs.new_version != '' }}
-        id: download_process
-        run: |
-          NEW_VERSION="${{ steps.prepare_assets.outputs.new_version }}"
-          ASSET_INFO="${{ steps.prepare_assets.outputs.asset_info }}"
+          chmod +x ./assets/download_assets.sh
+          ./assets/download_assets.sh
 
-          DOWNLOAD_DIR="$GITHUB_WORKSPACE/downloads"
-          echo "download_dir=$DOWNLOAD_DIR" >> $GITHUB_OUTPUT
-          mkdir -p "$DOWNLOAD_DIR"
-
-          # 循环处理资产信息
-          for row in $(echo "$ASSET_INFO" | jq -r '.[] | @base64'); do
-            _jq() {
-              echo ${row} | base64 --decode | jq -r ${1}
-            }
-
-            URL=$(_jq '.url')
-            FILENAME=$(basename "$URL")
-            ARCH=$(_jq '.arch')
-
-            echo "Downloading $FILENAME for $ARCH..."
-            curl -L -o "$DOWNLOAD_DIR/$FILENAME" "$URL"
-
-            # 解压并处理文件
-            mkdir -p "$DOWNLOAD_DIR/aria2-$NEW_VERSION-win-$ARCH-build1"
-            tar -xvf "$DOWNLOAD_DIR/$FILENAME" -C "$DOWNLOAD_DIR/aria2-$NEW_VERSION-win-$ARCH-build1"
-
-            # 复制 dl.bat 文件到目标目录
-            cp "$GITHUB_WORKSPACE/dl.bat" "$DOWNLOAD_DIR/aria2-$NEW_VERSION-win-$ARCH-build1/"
-
-            # 压缩文件
-            zip -r "$DOWNLOAD_DIR/aria2-$NEW_VERSION-win-$ARCH-build1-with-dl-bat.zip" "$DOWNLOAD_DIR/aria2-$NEW_VERSION-win-$ARCH-build1"
-          done
-
-      - name: Create and upload release
-        if: steps.download_process.outcome == 'success'
+      - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: "aria2 ${{ steps.prepare_assets.outputs.new_version }} for Windows"
-          tag_name: "v${{ steps.prepare_assets.outputs.new_version }}"
-          body: "This release includes the original Aria2 binaries along with a custom dl.bat script."
-          make_latest: true
-          files: |
-            ${{ steps.download_process.outputs.download_dir }}/aria2-${{ steps.prepare_assets.outputs.new_version }}-win-64bit-build1-with-dl-bat.zip
-            ${{ steps.download_process.outputs.download_dir }}/aria2-${{ steps.prepare_assets.outputs.new_version }}-win-32bit-build1-with-dl-bat.zip
