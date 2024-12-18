@@ -70,26 +70,17 @@ jobs:
             }
           }
         shell: pwsh
-
+        
       - name: Create Release
         if: steps.download_process.outcome == 'success'
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: aria2 ${{ steps.check_release.outputs.new_version }} for Windows
           tag_name: v${{ steps.check_release.outputs.new_version }}
-          name: "Aria2 with dl.bat included"
           body: "This release includes the original Aria2 binaries along with a custom dl.bat script."
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Release Asset
-        if: steps.create_release.outcome == 'success'
-        run: |
-          $NEW_VERSION = "${{ steps.check_release.outputs.new_version }}"
-          gh release upload "v$NEW_VERSION" `
-            "$env:GITHUB_WORKSPACE\downloads\aria2-$NEW_VERSION-win-64bit-build1-with-dl-bat.zip" `
-            "$env:GITHUB_WORKSPACE\downloads\aria2-$NEW_VERSION-win-32bit-build1-with-dl-bat.zip" `
-            --clobber
-        shell: pwsh
+          make_latest: true
+          files: |
+            $env:GITHUB_WORKSPACE\downloads\aria2-$NEW_VERSION-win-64bit-build1-with-dl-bat.zip
+            $env:GITHUB_WORKSPACE\downloads\aria2-$NEW_VERSION-win-32bit-build1-with-dl-bat.zip
