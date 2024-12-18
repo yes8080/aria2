@@ -28,9 +28,9 @@ jobs:
           
           if ($currentTag -ne $latestTag) {
             echo "::set-output name=new_version::$latestTag"
-            $latestTag | Out-File -FilePath .latest_version -Encoding utf8
+            Set-Content -Path .latest_version -Value $latestTag
           } else {
-            echo "No new version found."
+            Write-Host "No new version found."
           }
         shell: pwsh
 
@@ -38,8 +38,8 @@ jobs:
         if: steps.check_release.outputs.new_version != ''
         id: download_process
         run: |
-          $NEW_VERSION=${{ steps.check_release.outputs.new_version }}
-          $URL="https://github.com/aria2/aria2/releases/download/v${NEW_VERSION}/"
+          $NEW_VERSION = '${{ steps.check_release.outputs.new_version }}'
+          $URL = "https://github.com/aria2/aria2/releases/download/v${NEW_VERSION}/"
           Invoke-WebRequest "${URL}aria2-${NEW_VERSION}-win-64bit-build1.zip" -OutFile aria2-64.zip
           Invoke-WebRequest "${URL}aria2-${NEW_VERSION}-win-32bit-build1.zip" -OutFile aria2-32.zip
           Expand-Archive aria2-64.zip -DestinationPath .
@@ -66,7 +66,7 @@ jobs:
       - name: Upload Release Asset
         if: steps.create_release.outcome == 'success'
         run: |
-          $NEW_VERSION=${{ steps.check_release.outputs.new_version }}
+          $NEW_VERSION = '${{ steps.check_release.outputs.new_version }}'
           gh release upload "v${NEW_VERSION}" `
             "aria2-${NEW_VERSION}-win-64bit-build1-with-dl-bat.zip" `
             "aria2-${NEW_VERSION}-win-32bit-build1-with-dl-bat.zip" `
