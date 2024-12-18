@@ -52,8 +52,11 @@ jobs:
           mkdir -p downloads
           cd downloads
 
+          # Use a temporary file to store the JSON string, ensuring proper handling
+          echo "$DOWNLOAD_URLS" > urls.json
+
           # Parse the JSON array of URLs using jq and iterate over them
-          echo "$DOWNLOAD_URLS" | jq -c '.[]' | while IFS= read -r url; do
+          while IFS= read -r url; do
             filename=$(basename "$url")
             echo "Attempting to download from: $url"
             curl -L -o "$filename" "$url"
@@ -66,7 +69,10 @@ jobs:
               cp ../dl.bat "aria2-${NEW_VERSION}-win-32bit-build1/"
               zip -r "aria2-${NEW_VERSION}-win-32bit-build1-with-dl-bat.zip" "aria2-${NEW_VERSION}-win-32bit-build1"
             fi
-          done
+          done < <(jq -r '.[]' urls.json)
+
+          # Clean up temporary file
+          rm urls.json
         shell: bash
 
       - name: Create Release
