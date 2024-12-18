@@ -34,12 +34,19 @@ jobs:
         id: download_process
         run: |
           NEW_VERSION=${{ steps.check_release.outputs.new_version }}
-          DOWNLOAD_URLS=$(echo ${{ steps.check_release.outputs.download_urls }} | jq -r '.[]')
+          DOWNLOAD_URLS=${{ steps.check_release.outputs.download_urls }}
+
+          # Ensure DOWNLOAD_URLS is a valid JSON array
+          if [[ -z "$DOWNLOAD_URLS" ]]; then
+            echo "No download URLs found."
+            exit 1
+          fi
 
           mkdir -p downloads
           cd downloads
 
-          for url in $DOWNLOAD_URLS; do
+          # Parse the JSON array of URLs using jq
+          echo "$DOWNLOAD_URLS" | jq -c '.[]' | while read url; do
             filename=$(basename "$url")
             echo "Attempting to download from: $url"
             curl -L -o "$filename" "$url"
