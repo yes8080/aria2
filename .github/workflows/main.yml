@@ -51,6 +51,13 @@ jobs:
             index=$((index + 1))
           done
 
+      - name: Debug - Parse Assets
+        run: |
+          ASSETS=$(echo "$RELEASE_DATA" | jq -r '.assets[] | select(.browser_download_url | contains("win-")) | {url: .browser_download_url, name: .name, arch: (if .name | contains("64bit") then "64bit" else "32bit" end)}')
+
+          echo "Parsed Assets:"
+          echo "$ASSETS"
+
       - name: Check if Assets Found
         run: |
           if [ -z "$ASSETS" ]; then
