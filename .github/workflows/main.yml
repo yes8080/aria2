@@ -16,8 +16,11 @@ jobs:
         run: |
           $repo = "aria2/aria2"
           try {
+            # 获取最新发布版本信息
             $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -ErrorAction Stop
             $newVersion = $latestRelease.tag_name -replace '^release-', ''
+            
+            # 筛选符合条件的 Windows 版本
             $assets = $latestRelease.assets | Where-Object { $_.browser_download_url -like "*win-*bit-build*" }
             
             if (-not $assets) {
@@ -25,6 +28,7 @@ jobs:
               exit 1
             }
 
+            # 构建资产信息
             $assetInfo = foreach ($asset in $assets) {
               @{
                 url = $asset.browser_download_url
@@ -35,41 +39,47 @@ jobs:
 
             $assetInfoJson = ConvertTo-Json $assetInfo
 
-            "new_version=$newVersion" >> $env:GITHUB_OUTPUT
-            "asset_info=$assetInfoJson" >> $env:GITHUB_OUTPUT
+            # 将新的版本号和资产信息作为环境变量输出
+            echo "new_version=$newVersion" >> $GITHUB_ENV
+            echo "asset_info=$assetInfoJson" >> $GITHUB_ENV
             
           } catch {
             Write-Host "Failed to fetch latest release information: $_"
             exit 1
           }
         shell: pwsh
-        
+
       - name: Debug outputs
         run: |
-          echo "New Version: ${{ steps.prepare_assets.outputs.new_version }}"
-          echo "Asset Info: ${{ steps.prepare_assets.outputs.asset_info }}"
+          echo "New Version: ${{ env.new_version }}"
+          echo "Asset Info: ${{ env.asset_info }}"
         shell: pwsh
             
       - name: Download and process assets
-        if: steps.prepare_assets.outputs.new_version != ''
+        if: ${{ env.new_version != '' }}
         id: download_process
         run: |
-          $NEW_VERSION = "${{ steps.prepare_assets.outputs.new_version }}"
-          $ASSET_INFO = ConvertFrom-Json "${{ steps.prepare_assets.outputs.asset_info }}"
+          $NEW_VERSION = "${{ env.new_version }}"
+          $ASSET_INFO = ConvertFrom-Json "${{ env.asset_info }}"
           
           $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
           New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
-          "download_dir=$downloadDir" >> $env:GITHUB_OUTPUT
+          echo "download_dir=$downloadDir" >> $GITHUB_ENV
 
           foreach ($asset in $ASSET_INFO) {
             $filename = $asset.filename
             $arch = $asset.arch
             Write-Host "Attempting to download from: $($asset.url)"
-            Invoke-WebRequest -Uri $asset.url -OutFile "$downloadDir\$filename" -ErrorAction Stop
-
-            Expand-Archive -Path "$downloadDir\$filename" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-$arch-build1" -Force
-            Copy-Item "$env:GITHUB_WORKSPACE\dl.bat" "$downloadDir\aria2-$NEW_VERSION-win-$arch-build1\" -Force
-            Compress-Archive -Path "$downloadDir\aria2-$NEW_VERSION-win-$arch-build1\*" -DestinationPath "$downloadDir\aria2-$NEW_VERSION-win-$arch-build1-with-dl-bat.zip" -Force
+            
+            # 下载文件并解压
+            Invoke-WebRequest -Uri $asset.url -OutFile (Join-Path $downloadDir $filename) -ErrorAction Stop
+            Expand-Archive -Path (Join-Path $downloadDir $filename) -DestinationPath (Join-Path $downloadDir "aria2-$NEW_VERSION-win-$arch-build1") -Force
+            
+            # 复制自定义的 dl.bat 文件
+            Copy-Item (Join-Path $env:GITHUB_WORKSPACE "dl.bat") (Join-Path $downloadDir "aria2-$NEW_VERSION-win-$arch-build1") -Force
+            
+            # 压缩文件
+            Compress-Archive -Path (Join-Path $downloadDir "aria2-$NEW_VERSION-win-$arch-build1\*") -DestinationPath (Join-Path $downloadDir "aria2-$NEW_VERSION-win-$arch-build1-with-dl-bat.zip") -Force
           }
         shell: pwsh
 
@@ -78,10 +88,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: "aria2 ${{ steps.prepare_assets.outputs.new_version }} for Windows"
-          tag_name: "v${{ steps.prepare_assets.outputs.new_version }}"
+          name: "aria2 ${{ env.new_version }} for Windows"
+          tag_name: "v${{ env.new_version }}"
           body: "This release includes the original Aria2 binaries along with a custom dl.bat script."
           make_latest: true
           files: |
-            ${{ steps.download_process.outputs.download_dir }}\aria2-${{ steps.prepare_assets.outputs.new_version }}-win-64bit-build1-with-dl-bat.zip
-            ${{ steps.download_process.outputs.download_dir }}\aria2-${{ steps.prepare_assets.outputs.new_version }}-win-32bit-build1-with-dl-bat.zip
+            ${{ env.download_dir }}\aria2-${{ env.new_version }}-win-64bit-build1-with-dl-bat.zip
+            ${{ env.download_dir }}\aria2-${{ env.new_version }}-win-32bit-build1-with-dl-bat.zip
