@@ -34,7 +34,8 @@ jobs:
             }
 
             $assetInfoJson = ConvertTo-Json $assetInfo
-            $assetInfoJson | Out-File -FilePath "$env:GITHUB_WORKSPACE\asset_info.json"
+
+            echo "new_version=$newVersion"
 
             echo "new_version=$newVersion" >> $GITHUB_OUTPUT
             echo "asset_info=$assetInfoJson" >> $GITHUB_OUTPUT
