@@ -22,7 +22,7 @@ jobs:
 
           # 调用 Python 脚本解析资产信息
           echo "$RELEASE_DATA" > release_data.json
-          python3 parse_assets.py release_data.json
+          python3 .github/scripts/parse_assets.py release_data.json
 
           NEW_VERSION=$(cat new_version.txt)
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
