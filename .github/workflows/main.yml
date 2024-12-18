@@ -39,8 +39,9 @@ jobs:
 
             $assetInfoJson = ConvertTo-Json $assetInfo
 
-            "new_version=$newVersion" >> $env:GITHUB_OUTPUT
-            "asset_info=$assetInfoJson" >> $env:GITHUB_OUTPUT
+            # 使用 GITHUB_OUTPUT 输出新版本和资产信息
+            echo "new_version=$newVersion" >> $GITHUB_OUTPUT
+            echo "asset_info=$assetInfoJson" >> $GITHUB_OUTPUT
             
           } catch {
             Write-Host "Failed to fetch latest release information: $_"
@@ -50,20 +51,20 @@ jobs:
 
       - name: Debug outputs
         run: |
-          Write-Host "New Version: ${{ steps.prepare_assets.outputs.new_version }}"
-          Write-Host "Asset Info: ${{ steps.prepare_assets.outputs.asset_info }}"
+          echo "New Version: ${{ steps.prepare_assets.outputs.new_version }}"
+          echo "Asset Info: ${{ steps.prepare_assets.outputs.asset_info }}"
         shell: pwsh
 
       - name: Download and process assets
         if: ${{ steps.prepare_assets.outputs.new_version != '' }}
         id: download_process
         run: |
-          $NEW_VERSION = "${{ env.new_version }}"
-          $ASSET_INFO = ConvertFrom-Json "${{ env.asset_info }}"
+          $NEW_VERSION = "${{ steps.prepare_assets.outputs.new_version }}"
+          $ASSET_INFO = ConvertFrom-Json "${{ steps.prepare_assets.outputs.asset_info }}"
           
           $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
           New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
-          "download_dir=$downloadDir" >> $env:GITHUB_OUTPUT
+          echo "download_dir=$downloadDir" >> $GITHUB_ENV
 
           foreach ($asset in $ASSET_INFO) {
             $filename = $asset.filename
@@ -87,8 +88,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: "aria2 ${{ env.new_version }} for Windows"
-          tag_name: "v${{ env.new_version }}"
+          name: "aria2 ${{ steps.prepare_assets.outputs.new_version }} for Windows"
+          tag_name: "v${{ steps.prepare_assets.outputs.new_version }}"
           body: "This release includes the original Aria2 binaries along with a custom dl.bat script."
           make_latest: true
           files: |
