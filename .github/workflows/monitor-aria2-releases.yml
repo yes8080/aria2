@@ -7,63 +7,55 @@ on:
 
 jobs:
   check_and_update:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
-
       - name: Check for new release
         id: check_release
         run: |
-          import requests, json
-          response = requests.get('https://api.github.com/repos/aria2/aria2/releases/latest')
-          latest_tag = response.json()['tag_name']
-          try:
-            with open('.latest_version', 'r') as file:
-              current_tag = file.read().strip()
-          except FileNotFoundError:
-            current_tag = ''
-          if current_tag != latest_tag:
-            print(f"::set-output name=new_version::{latest_tag}")
-            with open('.latest_version', 'w') as file:
-              file.write(latest_tag)
-          else:
-            print("No new version found.")
+          $latestReleaseUrl = "https://api.github.com/repos/aria2/aria2/releases/latest"
+          $response = Invoke-RestMethod -Uri $latestReleaseUrl -Method Get -Headers @{"Accept"="application/vnd.github.v3+json"}
+          $latestTag = $response.tag_name.TrimStart("v")
+          
+          if (Test-Path .latest_version) {
+            $currentTag = Get-Content .latest_version
+          } else {
+            $currentTag = ""
+          }
+          
+          if ($currentTag -ne $latestTag) {
+            echo "::set-output name=new_version::$latestTag"
+            $latestTag | Out-File -FilePath .latest_version -Encoding utf8
+          } else {
+            echo "No new version found."
+          }
+        shell: pwsh
 
       - name: Download and process new release
         if: steps.check_release.outputs.new_version != ''
         id: download_process
         run: |
-          NEW_VERSION=${{ steps.check_release.outputs.new_version }}
-          # Remove the leading 'v' from the tag name if it exists
-          VERSION_NO_V=${NEW_VERSION#v}
-          URL="https://github.com/aria2/aria2/releases/download/${NEW_VERSION}/"
-          wget "${URL}aria2-${VERSION_NO_V}-win-64bit-build1.zip" -O aria2-64.zip
-          wget "${URL}aria2-${VERSION_NO_V}-win-32bit-build1.zip" -O aria2-32.zip
-          unzip aria2-64.zip -d .
-          unzip aria2-32.zip -d .
-          cp ./dl.bat "aria2-${VERSION_NO_V}-win-64bit-build1/"
-          cp ./dl.bat "aria2-${VERSION_NO_V}-win-32bit-build1/"
-          zip -r "aria2-${VERSION_NO_V}-win-64bit-build1-with-dl-bat.zip" "aria2-${VERSION_NO_V}-win-64bit-build1"
-          zip -r "aria2-${VERSION_NO_V}-win-32bit-build1-with-dl-bat.zip" "aria2-${VERSION_NO_V}-win-32bit-build1"
+          $NEW_VERSION=${{ steps.check_release.outputs.new_version }}
+          $URL="https://github.com/aria2/aria2/releases/download/v${NEW_VERSION}/"
+          Invoke-WebRequest "${URL}aria2-${NEW_VERSION}-win-64bit-build1.zip" -OutFile aria2-64.zip
+          Invoke-WebRequest "${URL}aria2-${NEW_VERSION}-win-32bit-build1.zip" -OutFile aria2-32.zip
+          Expand-Archive aria2-64.zip -DestinationPath .
+          Expand-Archive aria2-32.zip -DestinationPath .
+          Copy-Item ./dl.bat "aria2-${NEW_VERSION}-win-64bit-build1/"
+          Copy-Item ./dl.bat "aria2-${NEW_VERSION}-win-32bit-build1/"
+          Compress-Archive -Path "aria2-${NEW_VERSION}-win-64bit-build1" -DestinationPath "aria2-${NEW_VERSION}-win-64bit-build1-with-dl-bat.zip"
+          Compress-Archive -Path "aria2-${NEW_VERSION}-win-32bit-build1" -DestinationPath "aria2-${NEW_VERSION}-win-32bit-build1-with-dl-bat.zip"
+        shell: pwsh
 
       - name: Create Release
         if: steps.download_process.outcome == 'success'
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.check_release.outputs.new_version }}
+          tag_name: v${{ steps.check_release.outputs.new_version }}
           name: "Aria2 with dl.bat included"
           body: "This release includes the original Aria2 binaries along with a custom dl.bat script."
           draft: false
@@ -74,9 +66,9 @@ jobs:
       - name: Upload Release Asset
         if: steps.create_release.outcome == 'success'
         run: |
-          NEW_VERSION=${{ steps.check_release.outputs.new_version }}
-          VERSION_NO_V=${NEW_VERSION#v}
-          gh release upload ${NEW_VERSION} \
-            "aria2-${VERSION_NO_V}-win-64bit-build1-with-dl-bat.zip" \
-            "aria2-${VERSION_NO_V}-win-32bit-build1-with-dl-bat.zip" \
+          $NEW_VERSION=${{ steps.check_release.outputs.new_version }}
+          gh release upload "v${NEW_VERSION}" `
+            "aria2-${NEW_VERSION}-win-64bit-build1-with-dl-bat.zip" `
+            "aria2-${NEW_VERSION}-win-32bit-build1-with-dl-bat.zip" `
             --clobber
+        shell: pwsh
