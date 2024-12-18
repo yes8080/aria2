@@ -5,7 +5,7 @@ on:
 
 jobs:
   check_and_update:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -14,74 +14,68 @@ jobs:
       - name: Check for new release and prepare assets
         id: prepare_assets
         run: |
-          $repo = "aria2/aria2"
-          try {
-            # 获取最新发布版本信息
-            $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -ErrorAction Stop
-            $newVersion = $latestRelease.tag_name -replace '^release-', ''
-            
-            # 筛选符合条件的 Windows 版本
-            $assets = $latestRelease.assets | Where-Object { $_.browser_download_url -like "*win-*bit-build*" }
-            
-            if (-not $assets) {
-              Write-Host "No compatible Windows assets found."
-              exit 1
-            }
+          REPO="aria2/aria2"
+          API_URL="https://api.github.com/repos/$REPO/releases/latest"
 
-            # 构建资产信息
-            $assetInfo = foreach ($asset in $assets) {
-              @{
-                url = $asset.browser_download_url
-                filename = [System.IO.Path]::GetFileName($asset.browser_download_url)
-                arch = if ($asset.name -like "*64bit*") { "64bit" } else { "32bit" }
-              }
-            }
+          # 获取最新发布的版本信息
+          RELEASE_DATA=$(curl -s $API_URL)
+          NEW_VERSION=$(echo "$RELEASE_DATA" | jq -r '.tag_name' | sed 's/^release-//')
 
-            $assetInfoJson = ConvertTo-Json $assetInfo
+          # 获取符合条件的 Windows 版本
+          ASSETS=$(echo "$RELEASE_DATA" | jq -r '.assets[] | select(.browser_download_url | contains("win-")) | {url: .browser_download_url, name: .name, arch: if .name | contains("64bit") then "64bit" else "32bit" end}')
 
-            # 使用 GITHUB_OUTPUT 输出新版本和资产信息
-            echo "new_version=$newVersion" >> $GITHUB_OUTPUT
-            echo "asset_info=$assetInfoJson" >> $GITHUB_OUTPUT
-            
-          } catch {
-            Write-Host "Failed to fetch latest release information: $_"
+          if [ -z "$ASSETS" ]; then
+            echo "No compatible Windows assets found."
             exit 1
-          }
-        shell: pwsh
+          fi
+
+          # 输出新版本和资产信息
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "asset_info=$ASSETS" >> $GITHUB_OUTPUT
 
       - name: Debug outputs
         run: |
           echo "New Version: ${{ steps.prepare_assets.outputs.new_version }}"
           echo "Asset Info: ${{ steps.prepare_assets.outputs.asset_info }}"
-        shell: pwsh
-
+          
+      - name: Debug download process condition
+        run: |
+          echo "Checking if new_version is non-empty..."
+          echo "new_version: ${{ steps.prepare_assets.outputs.new_version }}"
+          
       - name: Download and process assets
         if: ${{ steps.prepare_assets.outputs.new_version != '' }}
         id: download_process
         run: |
-          $NEW_VERSION = "${{ steps.prepare_assets.outputs.new_version }}"
-          $ASSET_INFO = ConvertFrom-Json "${{ steps.prepare_assets.outputs.asset_info }}"
-          
-          $downloadDir = "$env:GITHUB_WORKSPACE\downloads"
-          New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
-          echo "download_dir=$downloadDir" >> $GITHUB_ENV
+          NEW_VERSION="${{ steps.prepare_assets.outputs.new_version }}"
+          ASSET_INFO="${{ steps.prepare_assets.outputs.asset_info }}"
 
-          foreach ($asset in $ASSET_INFO) {
-            $filename = $asset.filename
-            $arch = $asset.arch
-            Write-Host "Attempting to download from: $($asset.url)"
-            
-            # 下载文件并解压
-            Invoke-WebRequest -Uri $asset.url -OutFile (Join-Path $downloadDir $filename) -ErrorAction Stop
-            Expand-Archive -Path (Join-Path $downloadDir $filename) -DestinationPath (Join-Path $downloadDir "aria2-$NEW_VERSION-win-$arch-build1") -Force
-            
-            # 复制自定义的 dl.bat 文件
-            Copy-Item (Join-Path $env:GITHUB_WORKSPACE "dl.bat") (Join-Path $downloadDir "aria2-$NEW_VERSION-win-$arch-build1") -Force
-            
+          DOWNLOAD_DIR="$GITHUB_WORKSPACE/downloads"
+          mkdir -p "$DOWNLOAD_DIR"
+
+          # 循环处理资产信息
+          for row in $(echo "$ASSET_INFO" | jq -r '.[] | @base64'); do
+            _jq() {
+              echo ${row} | base64 --decode | jq -r ${1}
+            }
+
+            URL=$(_jq '.url')
+            FILENAME=$(basename "$URL")
+            ARCH=$(_jq '.arch')
+
+            echo "Downloading $FILENAME for $ARCH..."
+            curl -L -o "$DOWNLOAD_DIR/$FILENAME" "$URL"
+
+            # 解压并处理文件
+            mkdir -p "$DOWNLOAD_DIR/aria2-$NEW_VERSION-win-$ARCH-build1"
+            tar -xvf "$DOWNLOAD_DIR/$FILENAME" -C "$DOWNLOAD_DIR/aria2-$NEW_VERSION-win-$ARCH-build1"
+
+            # 复制 dl.bat 文件到目标目录
+            cp "$GITHUB_WORKSPACE/dl.bat" "$DOWNLOAD_DIR/aria2-$NEW_VERSION-win-$ARCH-build1/"
+
             # 压缩文件
-            Compress-Archive -Path (Join-Path $downloadDir "aria2-$NEW_VERSION-win-$arch-build1\*") -DestinationPath (Join-Path $downloadDir "aria2-$NEW_VERSION-win-$arch-build1-with-dl-bat.zip") -Force
-          }
-        shell: pwsh
+            zip -r "$DOWNLOAD_DIR/aria2-$NEW_VERSION-win-$ARCH-build1-with-dl-bat.zip" "$DOWNLOAD_DIR/aria2-$NEW_VERSION-win-$ARCH-build1"
+          done
 
       - name: Create and upload release
         if: steps.download_process.outcome == 'success'
@@ -93,5 +87,5 @@ jobs:
           body: "This release includes the original Aria2 binaries along with a custom dl.bat script."
           make_latest: true
           files: |
-            ${{ steps.download_process.outputs.download_dir }}\aria2-${{ steps.prepare_assets.outputs.new_version }}-win-64bit-build1-with-dl-bat.zip
-            ${{ steps.download_process.outputs.download_dir }}\aria2-${{ steps.prepare_assets.outputs.new_version }}-win-32bit-build1-with-dl-bat.zip
+            ${{ steps.download_process.outputs.download_dir }}/aria2-${{ steps.prepare_assets.outputs.new_version }}-win-64bit-build1-with-dl-bat.zip
+            ${{ steps.download_process.outputs.download_dir }}/aria2-${{ steps.prepare_assets.outputs.new_version }}-win-32bit-build1-with-dl-bat.zip
