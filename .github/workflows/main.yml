@@ -21,11 +21,25 @@ jobs:
       - name: Parse Assets
         run: |
           python3 assets/parse_assets.py release_data.json
+          
+      - name: Debug File Paths
+        run: |
+          echo "Current working directory: $PWD"
+          ls -l
+          echo "Contents of GITHUB_WORKSPACE:"
+          ls -l "$GITHUB_WORKSPACE"
 
       - name: Download and Package Assets
         run: |
           chmod +x ./assets/download_assets.sh
           ./assets/download_assets.sh
+          
+      - name: Debug File Paths
+        run: |
+          echo "Current working directory: $PWD"
+          ls -l
+          echo "Contents of GITHUB_WORKSPACE:"
+          ls -l "$GITHUB_WORKSPACE"
 
       - name: Upload Release
         uses: softprops/action-gh-release@v2
