@@ -1,9 +1,7 @@
-name: Package aria2 with download.cmd
+name: Package aria2 with dl.cmd
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -34,12 +32,12 @@ jobs:
     - name: Extract aria2.zip
       run: sudo apt-get install -y unzip && unzip aria2.zip -d aria2
 
-    - name: Rename and add download.cmd script
+    - name: Rename and add dl.cmd script
       run: |
         mv aria2/aria2-*-win-64bit-build1 aria2/aria2-${{ steps.get_release.outputs.version }}-win-64bit
-        cp download.cmd aria2/aria2-${{ steps.get_release.outputs.version }}-win-64bit/
+        cp dl.cmd aria2/aria2-${{ steps.get_release.outputs.version }}-win-64bit/
 
-    - name: Repackage aria2 with download.cmd
+    - name: Repackage aria2 with dl.cmd
       run: zip -r aria2-${{ steps.get_release.outputs.version }}-win-64bit.zip aria2/aria2-${{ steps.get_release.outputs.version }}-win-64bit
 
     - name: Create Release
