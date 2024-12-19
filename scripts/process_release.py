@@ -3,6 +3,7 @@ import requests
 import zipfile
 import shutil
 import subprocess
+import glob
 
 def get_latest_release_info():
     response = requests.get("https://api.github.com/repos/aria2/aria2/releases/latest")
@@ -43,9 +44,18 @@ def main():
 
     download_file(download_url, "aria2.zip")
     extract_zip("aria2.zip", "aria2")
-    os.rename("aria2/aria2-*-win-64bit-build1", f"aria2/aria2-{version}-win-64bit")
-    shutil.copy("dl.cmd", f"aria2/aria2-{version}-win-64bit/dl.cmd")
-    repackage_folder(f"aria2/aria2-{version}-win-64bit", f"aria2-{version}-win-64bit")
+
+    # Use glob to find the actual directory name
+    extracted_dirs = glob.glob("aria2/aria2-*-win-64bit-build1")
+    if not extracted_dirs:
+        raise FileNotFoundError("The expected directory was not found after extraction.")
+    
+    extracted_dir = extracted_dirs[0]
+    new_dir = f"aria2/aria2-{version}-win-64bit"
+    os.rename(extracted_dir, new_dir)
+
+    shutil.copy("dl.cmd", f"{new_dir}/dl.cmd")
+    repackage_folder(new_dir, f"aria2-{version}-win-64bit")
 
     tag_exists = create_git_tag(version)
     os.environ["TAG_ALREADY_EXISTS"] = str(tag_exists).lower()
