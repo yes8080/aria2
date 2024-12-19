@@ -47,6 +47,7 @@ jobs:
       if: env.TAG_ALREADY_EXISTS == 'false'
       run: |
         echo "Create release output: ${{ steps.create_release_step.outputs.upload_url }}"
+        echo "upload_url=${{ steps.create_release_step.outputs.upload_url }}" >> $GITHUB_ENV
 
     - name: Upload Release Asset
       if: env.TAG_ALREADY_EXISTS == 'false'
