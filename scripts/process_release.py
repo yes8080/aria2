@@ -27,6 +27,13 @@ def extract_zip(file_path, extract_to):
 def repackage_folder(src_folder, output_file):
     shutil.make_archive(output_file, 'zip', src_folder)
 
+def move_files_to_folder(src_folder, dest_folder):
+    if not os.path.exists(dest_folder):
+        os.makedirs(dest_folder)
+    for filename in os.listdir(src_folder):
+        src_file = os.path.join(src_folder, filename)
+        shutil.move(src_file, dest_folder)
+
 def create_git_tag(version):
     result = subprocess.run(["git", "ls-remote", "--tags", "origin"], capture_output=True, text=True)
     if f"refs/tags/v{version}" in result.stdout:
@@ -38,6 +45,9 @@ def create_git_tag(version):
 
 def main():
     version, download_url, body = get_latest_release_info()
+    os.environ["VERSION"] = version
+    os.environ["DOWNLOAD_URL"] = download_url
+    os.environ["BODY"] = body
     print(f"Version: {version}, Download URL: {download_url}")
 
     download_file(download_url, "aria2.zip")
@@ -52,8 +62,8 @@ def main():
     
     extracted_dir = extracted_dirs[0]
     new_dir = f"aria2/aria2-{version}-win-64bit"
-    os.rename(extracted_dir, new_dir)
-    print(f"Renamed {extracted_dir} to {new_dir}")
+    move_files_to_folder(extracted_dir, new_dir)
+    print(f"Moved files to {new_dir}")
 
     shutil.copy("dl.cmd", f"{new_dir}/dl.cmd")
     print("Copied dl.cmd")
