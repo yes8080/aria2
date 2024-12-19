@@ -5,53 +5,22 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
 
     - name: Set up environment
-      run: sudo apt-get install -y jq
+      run: sudo apt-get install -y python3 python3-pip zip unzip
 
-    - name: Get latest aria2 release
-      id: get_release
-      run: |
-        curl -s https://api.github.com/repos/aria2/aria2/releases/latest > latest_release.json
-        TAG_NAME=$(jq -r '.tag_name' latest_release.json)
-        VERSION=${TAG_NAME#release-}
-        DOWNLOAD_URL=$(jq -r '.assets[] | select(.name | contains("win-64bit-build1.zip")) | .browser_download_url' latest_release.json)
-        BODY=$(jq -r '.body' latest_release.json | tr '\n' ' ')
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
-        echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> $GITHUB_ENV
-        echo "BODY=$BODY" >> $GITHUB_ENV
+    - name: Install dependencies
+      run: pip install requests
 
-    - name: Download latest aria2 release
-      run: curl -L -o aria2.zip ${{ env.DOWNLOAD_URL }}
-
-    - name: Extract aria2.zip
-      run: sudo apt-get install -y unzip && unzip aria2.zip -d aria2
-
-    - name: Rename and add dl.cmd script
-      run: |
-        mv aria2/aria2-*-win-64bit-build1 aria2/aria2-${{ env.VERSION }}-win-64bit
-        cp dl.cmd aria2/aria2-${{ env.VERSION }}-win-64bit/
-
-    - name: Repackage aria2 with dl.cmd
-      run: zip -r aria2-${{ env.VERSION }}-win-64bit.zip aria2/aria2-${{ env.VERSION }}-win-64bit
-
-    - name: Check if tag exists
-      id: check_tag
-      run: |
-        TAG_EXIST=$(git ls-remote --tags origin | grep "refs/tags/v${{ env.VERSION }}$" || true)
-        if [ -n "$TAG_EXIST" ]; then
-          echo "TAG_ALREADY_EXISTS=true" >> $GITHUB_ENV
-        else
-          echo "TAG_ALREADY_EXISTS=false" >> $GITHUB_ENV
-        fi
+    - name: Run business logic script
+      run: python3 scripts/process_release.py
 
     - name: Create Release
-      id: create_release
       if: env.TAG_ALREADY_EXISTS == 'false'
       uses: actions/create-release@v1
       env:
