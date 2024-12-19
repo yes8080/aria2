@@ -20,6 +20,19 @@ jobs:
     - name: Run business logic script
       run: python3 scripts/process_release.py
 
+    - name: Set environment variables
+      id: set_env
+      run: |
+        echo "VERSION=$(python3 -c 'import os; print(os.getenv(\"VERSION\"))')" >> $GITHUB_ENV
+        echo "TAG_ALREADY_EXISTS=$(python3 -c 'import os; print(os.getenv(\"TAG_ALREADY_EXISTS\"))')" >> $GITHUB_ENV
+        echo "BODY=$(python3 -c 'import os; print(os.getenv(\"BODY\"))')" >> $GITHUB_ENV
+
+    - name: Debug environment variables
+      run: |
+        echo "VERSION: $VERSION"
+        echo "TAG_ALREADY_EXISTS: $TAG_ALREADY_EXISTS"
+        echo "BODY: $BODY"
+
     - name: Create Release
       if: env.TAG_ALREADY_EXISTS == 'false'
       uses: actions/create-release@v1
