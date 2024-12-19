@@ -41,9 +41,12 @@ def main():
     os.environ["VERSION"] = version
     os.environ["DOWNLOAD_URL"] = download_url
     os.environ["BODY"] = body
+    print(f"Version: {version}, Download URL: {download_url}")
 
     download_file(download_url, "aria2.zip")
+    print("Downloaded aria2.zip")
     extract_zip("aria2.zip", "aria2")
+    print("Extracted aria2.zip")
 
     # Use glob to find the actual directory name
     extracted_dirs = glob.glob("aria2/aria2-*-win-64bit-build1")
@@ -53,12 +56,16 @@ def main():
     extracted_dir = extracted_dirs[0]
     new_dir = f"aria2/aria2-{version}-win-64bit"
     os.rename(extracted_dir, new_dir)
+    print(f"Renamed {extracted_dir} to {new_dir}")
 
     shutil.copy("dl.cmd", f"{new_dir}/dl.cmd")
+    print("Copied dl.cmd")
     repackage_folder(new_dir, f"aria2-{version}-win-64bit")
+    print(f"Repackaged to aria2-{version}-win-64bit.zip")
 
     tag_exists = create_git_tag(version)
     os.environ["TAG_ALREADY_EXISTS"] = str(tag_exists).lower()
+    print(f"Tag already exists: {tag_exists}")
 
 if __name__ == "__main__":
     main()
