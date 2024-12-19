@@ -1,0 +1,54 @@
+import os
+import requests
+import zipfile
+import shutil
+import subprocess
+
+def get_latest_release_info():
+    response = requests.get("https://api.github.com/repos/aria2/aria2/releases/latest")
+    release_info = response.json()
+    tag_name = release_info['tag_name']
+    version = tag_name.replace("release-", "")
+    download_url = next(asset['browser_download_url'] for asset in release_info['assets'] if "win-64bit-build1.zip" in asset['name'])
+    body = release_info['body'].replace('\n', ' ')
+    return version, download_url, body
+
+def download_file(url, path):
+    response = requests.get(url, stream=True)
+    with open(path, 'wb') as file:
+        for chunk in response.iter_content(chunk_size=8192):
+            file.write(chunk)
+
+def extract_zip(file_path, extract_to):
+    with zipfile.ZipFile(file_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_to)
+
+def repackage_folder(src_folder, output_file):
+    shutil.make_archive(output_file, 'zip', src_folder)
+
+def create_git_tag(version):
+    result = subprocess.run(["git", "ls-remote", "--tags", "origin"], capture_output=True, text=True)
+    if f"refs/tags/v{version}" in result.stdout:
+        return True
+    else:
+        subprocess.run(["git", "tag", f"v{version}"])
+        subprocess.run(["git", "push", "origin", f"v{version}"])
+        return False
+
+def main():
+    version, download_url, body = get_latest_release_info()
+    os.environ["VERSION"] = version
+    os.environ["DOWNLOAD_URL"] = download_url
+    os.environ["BODY"] = body
+
+    download_file(download_url, "aria2.zip")
+    extract_zip("aria2.zip", "aria2")
+    os.rename("aria2/aria2-*-win-64bit-build1", f"aria2/aria2-{version}-win-64bit")
+    shutil.copy("dl.cmd", f"aria2/aria2-{version}-win-64bit/dl.cmd")
+    repackage_folder(f"aria2/aria2-{version}-win-64bit", f"aria2-{version}-win-64bit")
+
+    tag_exists = create_git_tag(version)
+    os.environ["TAG_ALREADY_EXISTS"] = str(tag_exists).lower()
+
+if __name__ == "__main__":
+    main()
