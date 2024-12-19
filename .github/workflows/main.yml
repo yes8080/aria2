@@ -1,47 +1,65 @@
-name: Monitor Aria2 Releases
+name: Package aria2 with download.cmd
 
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 jobs:
-  prepare_assets:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-      - name: Get Latest Release Info
-        run: |
-          REPO="aria2/aria2"
-          API_URL="https://api.github.com/repos/$REPO/releases/latest"
-          RELEASE_DATA=$(curl -s $API_URL)
-          echo "$RELEASE_DATA" > release_data.json
+    - name: Set up environment
+      run: sudo apt-get install -y jq
 
-      - name: Parse Assets
-        run: |
-          python3 assets/parse_assets.py release_data.json
-          
-      - name: Debug File Paths
-        run: |
-          echo "Current working directory: $PWD"
-          ls -l
-          echo "Contents of GITHUB_WORKSPACE:"
-          ls -l "$GITHUB_WORKSPACE"
+    - name: Get latest aria2 release
+      id: get_release
+      run: |
+        curl -s https://api.github.com/repos/aria2/aria2/releases/latest > latest_release.json
+        TAG_NAME=$(jq -r '.tag_name' latest_release.json)
+        VERSION=${TAG_NAME#release-}
+        DOWNLOAD_URL=$(jq -r '.assets[] | select(.name | contains("win-64bit-build1.zip")) | .browser_download_url' latest_release.json)
+        BODY=$(jq -r '.body' latest_release.json)
+        echo "::set-output name=version::${VERSION}"
+        echo "::set-output name=download_url::${DOWNLOAD_URL}"
+        echo "::set-output name=body::${BODY}"
 
-      - name: Download and Package Assets
-        run: |
-          chmod +x ./assets/download_assets.sh
-          ./assets/download_assets.sh
-          
-      - name: Debug File Paths
-        run: |
-          echo "Current working directory: $PWD"
-          ls -l
-          echo "Contents of GITHUB_WORKSPACE:"
-          ls -l "$GITHUB_WORKSPACE"
+    - name: Download latest aria2 release
+      run: curl -L -o aria2.zip ${{ steps.get_release.outputs.download_url }}
 
-      - name: Upload Release
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Extract aria2.zip
+      run: sudo apt-get install -y unzip && unzip aria2.zip -d aria2
+
+    - name: Rename and add download.cmd script
+      run: |
+        mv aria2/aria2-*-win-64bit-build1 aria2/aria2-${{ steps.get_release.outputs.version }}-win-64bit
+        cp download.cmd aria2/aria2-${{ steps.get_release.outputs.version }}-win-64bit/
+
+    - name: Repackage aria2 with download.cmd
+      run: zip -r aria2-${{ steps.get_release.outputs.version }}-win-64bit.zip aria2/aria2-${{ steps.get_release.outputs.version }}-win-64bit
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: aria2 ${{ steps.get_release.outputs.version }}
+        body: ${{ steps.get_release.outputs.body }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./aria2-${{ steps.get_release.outputs.version }}-win-64bit.zip
+        asset_name: aria2-${{ steps.get_release.outputs.version }}-win-64bit.zip
+        asset_content_type: application/zip
