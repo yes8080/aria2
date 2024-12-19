@@ -21,7 +21,7 @@ jobs:
         TAG_NAME=$(jq -r '.tag_name' latest_release.json)
         VERSION=${TAG_NAME#release-}
         DOWNLOAD_URL=$(jq -r '.assets[] | select(.name | contains("win-64bit-build1.zip")) | .browser_download_url' latest_release.json)
-        BODY=$(jq -r '.body' latest_release.json)
+        BODY=$(jq -r '.body' latest_release.json | tr '\n' ' ')
         echo "VERSION=$VERSION" >> $GITHUB_ENV
         echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> $GITHUB_ENV
         echo "BODY=$BODY" >> $GITHUB_ENV
