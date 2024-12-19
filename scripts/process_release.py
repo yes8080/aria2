@@ -38,9 +38,6 @@ def create_git_tag(version):
 
 def main():
     version, download_url, body = get_latest_release_info()
-    os.environ["VERSION"] = version
-    os.environ["DOWNLOAD_URL"] = download_url
-    os.environ["BODY"] = body
     print(f"Version: {version}, Download URL: {download_url}")
 
     download_file(download_url, "aria2.zip")
@@ -64,8 +61,14 @@ def main():
     print(f"Repackaged to aria2-{version}-win-64bit.zip")
 
     tag_exists = create_git_tag(version)
-    os.environ["TAG_ALREADY_EXISTS"] = str(tag_exists).lower()
     print(f"Tag already exists: {tag_exists}")
+
+    # Write environment variables to file
+    with open("env_vars.txt", "w") as env_file:
+        env_file.write(f"VERSION={version}\n")
+        env_file.write(f"DOWNLOAD_URL={download_url}\n")
+        env_file.write(f"BODY={body}\n")
+        env_file.write(f"TAG_ALREADY_EXISTS={str(tag_exists).lower()}\n")
 
 if __name__ == "__main__":
     main()
