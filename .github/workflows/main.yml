@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Checkout repository
@@ -22,42 +22,58 @@ jobs:
         VERSION=${TAG_NAME#release-}
         DOWNLOAD_URL=$(jq -r '.assets[] | select(.name | contains("win-64bit-build1.zip")) | .browser_download_url' latest_release.json)
         BODY=$(jq -r '.body' latest_release.json)
-        echo "::set-output name=version::${VERSION}"
-        echo "::set-output name=download_url::${DOWNLOAD_URL}"
-        echo "::set-output name=body::${BODY}"
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> $GITHUB_ENV
+        echo "BODY=$BODY" >> $GITHUB_ENV
 
     - name: Download latest aria2 release
-      run: curl -L -o aria2.zip ${{ steps.get_release.outputs.download_url }}
+      run: curl -L -o aria2.zip ${{ env.DOWNLOAD_URL }}
 
     - name: Extract aria2.zip
       run: sudo apt-get install -y unzip && unzip aria2.zip -d aria2
 
     - name: Rename and add dl.cmd script
       run: |
-        mv aria2/aria2-*-win-64bit-build1 aria2/aria2-${{ steps.get_release.outputs.version }}-win-64bit
-        cp dl.cmd aria2/aria2-${{ steps.get_release.outputs.version }}-win-64bit/
+        mv aria2/aria2-*-win-64bit-build1 aria2/aria2-${{ env.VERSION }}-win-64bit
+        cp dl.cmd aria2/aria2-${{ env.VERSION }}-win-64bit/
 
     - name: Repackage aria2 with dl.cmd
-      run: zip -r aria2-${{ steps.get_release.outputs.version }}-win-64bit.zip aria2/aria2-${{ steps.get_release.outputs.version }}-win-64bit
+      run: zip -r aria2-${{ env.VERSION }}-win-64bit.zip aria2/aria2-${{ env.VERSION }}-win-64bit
+
+    - name: Check if tag exists
+      id: check_tag
+      run: |
+        TAG_EXIST=$(git ls-remote --tags origin | grep "refs/tags/v${{ env.VERSION }}$" || true)
+        if [ -n "$TAG_EXIST" ]; then
+          echo "TAG_ALREADY_EXISTS=true" >> $GITHUB_ENV
+        else
+          echo "TAG_ALREADY_EXISTS=false" >> $GITHUB_ENV
+        fi
 
     - name: Create Release
       id: create_release
+      if: env.TAG_ALREADY_EXISTS == 'false'
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: v${{ steps.get_release.outputs.version }}
-        release_name: aria2 ${{ steps.get_release.outputs.version }}
-        body: ${{ steps.get_release.outputs.body }}
+        tag_name: v${{ env.VERSION }}
+        release_name: aria2 ${{ env.VERSION }}
+        body: ${{ env.BODY }}
         draft: false
         prerelease: false
 
     - name: Upload Release Asset
+      if: env.TAG_ALREADY_EXISTS == 'false'
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./aria2-${{ steps.get_release.outputs.version }}-win-64bit.zip
-        asset_name: aria2-${{ steps.get_release.outputs.version }}-win-64bit.zip
+        asset_path: ./aria2-${{ env.VERSION }}-win-64bit.zip
+        asset_name: aria2-${{ env.VERSION }}-win-64bit.zip
         asset_content_type: application/zip
+
+    - name: Notify if tag already exists
+      if: env.TAG_ALREADY_EXISTS == 'true'
+      run: echo "Tag v${{ env.VERSION }} already exists. Skipping release creation."
