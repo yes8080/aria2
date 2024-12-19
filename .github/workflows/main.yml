@@ -20,12 +20,9 @@ jobs:
     - name: Run business logic script
       run: python3 scripts/process_release.py
 
-    - name: Set environment variables
-      id: set_env
+    - name: Set environment variables from file
       run: |
-        echo "VERSION=$(python3 -c 'import os; print(os.getenv(\"VERSION\"))')" >> $GITHUB_ENV
-        echo "TAG_ALREADY_EXISTS=$(python3 -c 'import os; print(os.getenv(\"TAG_ALREADY_EXISTS\"))')" >> $GITHUB_ENV
-        echo "BODY=$(python3 -c 'import os; print(os.getenv(\"BODY\"))')" >> $GITHUB_ENV
+        cat env_vars.txt >> $GITHUB_ENV
 
     - name: Debug environment variables
       run: |
