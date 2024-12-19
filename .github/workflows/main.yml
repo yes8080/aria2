@@ -31,6 +31,7 @@ jobs:
         echo "BODY: $BODY"
 
     - name: Create Release
+      id: create_release_step
       if: env.TAG_ALREADY_EXISTS == 'false'
       uses: actions/create-release@v1
       env:
@@ -42,13 +43,18 @@ jobs:
         draft: false
         prerelease: false
 
+    - name: Debug create_release output
+      if: env.TAG_ALREADY_EXISTS == 'false'
+      run: |
+        echo "Create release output: ${{ steps.create_release_step.outputs.upload_url }}"
+
     - name: Upload Release Asset
       if: env.TAG_ALREADY_EXISTS == 'false'
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        upload_url: ${{ steps.create_release_step.outputs.upload_url }}
         asset_path: ./aria2-${{ env.VERSION }}-win-64bit.zip
         asset_name: aria2-${{ env.VERSION }}-win-64bit.zip
         asset_content_type: application/zip
